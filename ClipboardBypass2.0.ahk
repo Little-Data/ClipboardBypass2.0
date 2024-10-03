@@ -5,7 +5,7 @@ A_TrayMenu.Add("About", MenuHandler)  ; 创建新菜单项
 Persistent  ;防止脚本在最后一个线程完成后自动退出， 允许它在空闲状态下运行
 
 MenuHandler(About,*) {  ;完整：MenuHandler(ItemName, ItemPos, MyMenu)
-    MsgBox "该软件由HAF半个水果在前人的基础上使用2.0 Autohotkey版本编写`nGithub：https://github.com/Little-Data"
+    MsgBox "该软件由HAF半个水果在前人的基础上使用2.0 Autohotkey版本编写`nGithub：https://github.com/Little-Data/ClipboardBypass2.0"
 }
 MsgBox "
    (
