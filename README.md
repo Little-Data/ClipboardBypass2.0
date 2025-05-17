@@ -7,6 +7,16 @@ Bypass the prohibition of pasting restrictions and simulate keyboard typing.
 >注意检查粘贴后的文本，有些内容可能会在粘贴后消失（原因是输入太快了，可能电脑一卡就不见了）
 >Pay attention to check the pasted text, some content may disappear after pasting (the reason is that the input is too fast, and the computer may disappear as soon as the computer is lagging)
 
+# 目前实现的功能
+
+模拟打字输入（含可配置错字率，就是打错字后删掉再写正确的）
+
+自定义输入延迟参数（仅限启用了模拟打字输入）
+
+快捷键更换：Ctrl+Shift+V 防止误操作
+
+可以停止当前粘贴操作
+
 # 1.0版参考Version 1.0 Reference
 
 ```ahk
