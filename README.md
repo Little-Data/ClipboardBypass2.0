@@ -1,6 +1,8 @@
 # ClipboardBypass2
 绕过禁止粘贴限制，模拟键盘输入。
 
+[下载入口](https://github.com/Little-Data/ClipboardBypass2.0/releases)
+
 Bypass the prohibition of pasting restrictions and simulate keyboard typing.
 
 >[!important]
