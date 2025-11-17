@@ -13,7 +13,9 @@ global Settings := {
     BackspaceDelay: [30, 100],      ; 回删延迟范围 (毫秒)
     ScriptEnabled: true,        ; 是否启用脚本
     IsTypingRunning: false,      ; 运行状态标志 (用于检测当前是否有输入操作在进行)
-    ShowHelpOnStartup: true     ; 是否在启动时显示帮助
+    ShowHelpOnStartup: true,    ; 是否在启动时显示帮助
+    DelayExecutionEnabled: false,  ; 是否启用延迟执行
+    ExecutionDelay: 3000           ; 延迟执行时间(毫秒)，默认3秒
 }
 
 ; INI配置文件路径
@@ -57,6 +59,11 @@ if (Settings.HumanTypingEnabled)
     if (Settings.IsTypingRunning) {
         MsgBox "请等待当前操作完成！", "警告", "Icon!"
         return
+    }
+
+    ; 如果启用了延迟执行，先等待指定时间
+    if (Settings.DelayExecutionEnabled) {
+        Sleep Settings.ExecutionDelay
     }
 
     ; 获取剪贴板内容并检查是否为空
@@ -148,6 +155,10 @@ LoadSettings() {
         Settings.DelayBetweenChars := StrSplit(IniRead(iniFile, "Settings", "DelayBetweenChars", Settings.DelayBetweenChars[1] "," Settings.DelayBetweenChars[2]), ",")
         Settings.BackspaceDelay := StrSplit(IniRead(iniFile, "Settings", "BackspaceDelay", Settings.BackspaceDelay[1] "," Settings.BackspaceDelay[2]), ",")
       
+        ; 读取延迟执行设置
+        Settings.DelayExecutionEnabled := (IniRead(iniFile, "Settings", "DelayExecutionEnabled", "false") = "true")
+        Settings.ExecutionDelay := IniRead(iniFile, "Settings", "ExecutionDelay", Settings.ExecutionDelay) + 0
+
         ; 验证并修正延迟范围设置
         Settings.DelayBetweenLines := ValidateRange([Settings.DelayBetweenLines[1] + 0, Settings.DelayBetweenLines[2] + 0])
         Settings.DelayBetweenChars := ValidateRange([Settings.DelayBetweenChars[1] + 0, Settings.DelayBetweenChars[2] + 0])
@@ -182,6 +193,8 @@ SaveSettingsToIni() {
         IniWrite Settings.DelayBetweenLines[1] "," Settings.DelayBetweenLines[2], iniFile, "Settings", "DelayBetweenLines"
         IniWrite Settings.DelayBetweenChars[1] "," Settings.DelayBetweenChars[2], iniFile, "Settings", "DelayBetweenChars"
         IniWrite Settings.BackspaceDelay[1] "," Settings.BackspaceDelay[2], iniFile, "Settings", "BackspaceDelay"
+        IniWrite Settings.DelayExecutionEnabled ? "true" : "false", iniFile, "Settings", "DelayExecutionEnabled"
+        IniWrite Settings.ExecutionDelay, iniFile, "Settings", "ExecutionDelay"
     } catch as e {
         MsgBox "保存设置失败: " e.Message, "错误", "Icon!"
     }
@@ -235,7 +248,15 @@ ShowSettings(*) {
     BkspDelayMin := MyGui.Add("Edit", "x" col2X " yp w50 Number", Settings.BackspaceDelay[1])
     MyGui.Add("Text", "x+5 yp+3 w10", "-")
     BkspDelayMax := MyGui.Add("Edit", "x+5 yp-3 w50 Number", Settings.BackspaceDelay[2])
-  
+
+    ; 延迟执行设置
+    MyGui.Add("Text", "x" col1X " y" (curY + rowH) " w100", "启用延迟执行:")
+    DelayExecutionCB := MyGui.Add("CheckBox", "x" col2X " y" (curY + rowH) " Checked" Settings.DelayExecutionEnabled)
+
+    ; 延迟时间设置
+    MyGui.Add("Text", "x" col1X " y" (curY + rowH + 30) " w100", "延迟时间 (秒):")
+    ExecutionDelayEdit := MyGui.Add("Edit", "x" col2X " y" (curY + rowH + 30) " w50 Number", Settings.ExecutionDelay / 1000)
+
     ; 保存按钮
     SaveBtn := MyGui.Add("Button", "x100 y+25 w100", "保存设置")
     SaveBtn.OnEvent("Click", SaveSettings)
@@ -245,14 +266,36 @@ ShowSettings(*) {
     ; 保存设置函数
     SaveSettings(*) {
         try {
-            ; 从控件获取新值
+            ; 从控件获取新值并转换为数字
             Settings.ScriptEnabled := ScriptEnableCB.Value
             Settings.HumanTypingEnabled := HumanTypingCB.Value
             Settings.TypoRate := TypoSlider.Value
-            Settings.DelayBetweenLines := [LineDelayMin.Text, LineDelayMax.Text]
-            Settings.DelayBetweenChars := [CharDelayMin.Text, CharDelayMax.Text]
-            Settings.BackspaceDelay := [BkspDelayMin.Text, BkspDelayMax.Text]
-          
+            
+            ; 转换延迟范围为数字并验证有效性
+            lineMin := LineDelayMin.Text + 0
+            lineMax := LineDelayMax.Text + 0
+            charMin := CharDelayMin.Text + 0
+            charMax := CharDelayMax.Text + 0
+            bkspMin := BkspDelayMin.Text + 0
+            bkspMax := BkspDelayMax.Text + 0
+            execDelay := ExecutionDelayEdit.Text + 0
+
+            ; 验证输入是否为有效数字
+            ValidateNumberInput(LineDelayMin.Text, lineMin, "行间延迟最小值")
+            ValidateNumberInput(LineDelayMax.Text, lineMax, "行间延迟最大值")
+            ValidateNumberInput(CharDelayMin.Text, charMin, "字符间延迟最小值")
+            ValidateNumberInput(CharDelayMax.Text, charMax, "字符间延迟最大值")
+            ValidateNumberInput(BkspDelayMin.Text, bkspMin, "回删延迟最小值")
+            ValidateNumberInput(BkspDelayMax.Text, bkspMax, "回删延迟最大值")
+            ValidateNumberInput(ExecutionDelayEdit.Text, execDelay, "执行延迟时间")
+
+            ; 赋值给设置
+            Settings.DelayBetweenLines := [lineMin, lineMax]
+            Settings.DelayBetweenChars := [charMin, charMax]
+            Settings.BackspaceDelay := [bkspMin, bkspMax]
+            Settings.DelayExecutionEnabled := DelayExecutionCB.Value
+            Settings.ExecutionDelay := execDelay * 1000  ; 转换为毫秒
+        
             ; 验证范围设置
             for range in [Settings.DelayBetweenLines, Settings.DelayBetweenChars, Settings.BackspaceDelay] {
                 if (range[1] > range[2]) {
@@ -262,7 +305,10 @@ ShowSettings(*) {
                     throw "延迟时间不能为负数"
                 }
             }
-          
+            if (Settings.ExecutionDelay < 0) {
+                throw "延迟时间不能为负数"
+            }
+
             ; 保存设置到INI文件
             SaveSettingsToIni()
             
@@ -287,6 +333,17 @@ ShowSettings(*) {
         }
     }
   
+    ValidateNumberInput(inputText, numericValue, fieldName) {
+        ; 检查是否为空
+        if (inputText = "") {
+            throw fieldName "不能为空"
+        }
+        ; 检查是否为有效数字（非数字字符串转换后为0，但原始输入不是"0"）
+        if (numericValue = 0 && inputText != "0" && inputText != "0.0") {
+            throw fieldName "必须是有效的数字"
+        }
+    }
+
     ; GUI关闭事件处理
     GuiClose(*) {
         MyGui.Destroy()
@@ -426,7 +483,7 @@ ShowAbout(*) {
 
 Github：https://github.com/Little-Data/ClipboardBypass2.0
 
-最后更新：2025.05.18
+最后更新：2025.11.17
     )"
     MsgBox helpText, "关于", "Iconi"
 }
