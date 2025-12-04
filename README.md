@@ -1,7 +1,7 @@
 # ClipboardBypass2
 绕过禁止粘贴限制，模拟键盘输入。
 
-[下载入口](https://github.com/Little-Data/ClipboardBypass2.0/releases)
+[ClipboardBypass2下载入口](https://github.com/Little-Data/ClipboardBypass2.0/releases)
 
 Bypass the prohibition of pasting restrictions and simulate keyboard typing.
 
@@ -15,9 +15,35 @@ Bypass the prohibition of pasting restrictions and simulate keyboard typing.
 
 自定义输入延迟参数（仅限启用了模拟打字输入）
 
-快捷键更换：Ctrl+Shift+V 防止误操作
+支持快捷键更换，默认快捷键：Ctrl+Shift+V 防止误操作
 
 可以停止当前粘贴操作
+
+# 自定义快捷键说明
+
+<details>
+<summary>展开查看长图</summary>
+
+<img src="https://github.com/user-attachments/assets/09759c8a-fd9c-4b0a-8e17-3600fcc18ba5" />
+
+</details>
+
+# 新增虚拟机粘贴工具
+
+`paste_to_vm`是用于在未安装增强工具时允许将宿主机的剪贴板内容“粘贴”到虚拟机。不支持中文，因为程序模拟按键扫描码（即模拟键盘按键）。
+
+默认快捷键：Ctrl+Shift+V
+
+依赖
+
+```
+pyperclip
+pynput
+pystray
+```
+**注意：不要和ClipboardBypass2同时使用！不要将该程序与ClipboardBypass2放在同个目录！**
+
+如想修改快捷键请直接修改源码里`keyboard.HotKey.parse`部分
 
 # 1.0版参考Version 1.0 Reference
 
