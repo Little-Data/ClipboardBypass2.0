@@ -26,8 +26,14 @@ iniFile := A_ScriptDir "\ClipboardBypass2.ini"
 ; 加载保存的设置
 LoadSettings()
 
-; 注册快捷键
-RegisterHotkey()
+; 启动时根据脚本状态决定是否注册热键
+if (Settings.ScriptEnabled) {
+    RegisterHotkey()
+} else {
+    try {
+        Hotkey(Settings.HotkeyPaste, "Off")
+    }
+}
 
 ; 显示启动帮助
 ShowStartupHelp()
@@ -437,6 +443,13 @@ ToggleScript(*) {
     global Settings
     Settings.ScriptEnabled := !Settings.ScriptEnabled  ; 切换状态
     Tray.ToggleCheck("启用脚本")  ; 更新菜单勾选状态
+    if (Settings.ScriptEnabled) {
+        RegisterHotkey()
+    } else {
+        try {
+            Hotkey(Settings.HotkeyPaste, "Off")
+        }
+    }
     SaveSettingsToIni()  ; 保存设置
 }
 
@@ -572,7 +585,7 @@ ShowAbout(*) {
 
 Github：https://github.com/Little-Data/ClipboardBypass2.0
 
-最后更新：2025.12.04
+最后更新：2026.03.26
     )"
     MsgBox helpText, "关于", "Iconi"
 }
