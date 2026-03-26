@@ -1,7 +1,7 @@
 ; 脚本设置指令
 #SingleInstance Force  ; 只允许单个实例运行
 #Requires AutoHotkey v2.0  ; 要求AHK v2.0版本
-A_IconTip := "ClipboardBypass 2"  ; 托盘图标提示文本
+A_IconTip := "ClipboardBypass2"  ; 托盘图标提示文本
 Persistent  ; 保持脚本持续运行
 
 ; 默认设置值
@@ -15,7 +15,9 @@ global Settings := {
     IsTypingRunning: false,      ; 运行状态标志 (用于检测当前是否有输入操作在进行)
     ShowHelpOnStartup: true,    ; 是否在启动时显示帮助
     DelayExecutionEnabled: false,  ; 是否启用延迟执行
-    ExecutionDelay: 3000           ; 延迟执行时间(毫秒)，默认3秒
+    ExecutionDelay: 3000,           ; 延迟执行时间(毫秒)，默认3秒
+    DisableIndentation: false,      ; 是否禁用缩进
+    HotkeyPaste: "^+v"             ; 默认粘贴快捷键：Ctrl+Shift+V
 }
 
 ; INI配置文件路径
@@ -23,6 +25,9 @@ iniFile := A_ScriptDir "\ClipboardBypass2.ini"
 
 ; 加载保存的设置
 LoadSettings()
+
+; 注册快捷键
+RegisterHotkey()
 
 ; 显示启动帮助
 ShowStartupHelp()
@@ -47,8 +52,37 @@ if (Settings.ScriptEnabled)
 if (Settings.HumanTypingEnabled)
     Tray.Check("模拟打字")
 
-; 主热键：Ctrl+Shift+V 粘贴剪贴板内容
-^+v:: {
+; 注册快捷键的核心函数
+RegisterHotkey() {
+    global Settings
+    ; 先检查热键是否存在再卸载
+    try {
+        Hotkey(Settings.HotkeyPaste, PasteHandler, "Off")
+    } catch {
+    ; 忽略未注册热键的卸载错误
+    }
+    ; 验证热键有效性，无效则使用默认值
+    if !IsValidHotkey(Settings.HotkeyPaste) {
+        Settings.HotkeyPaste := "^+v"  ; 回退默认值
+    }
+    ; 注册新热键（如需通配符，应加在热键字符串前，如*$^+v）
+    Hotkey(Settings.HotkeyPaste, PasteHandler, "On")
+}
+
+; 验证热键格式是否有效
+IsValidHotkey(hotkeyStr) {
+    try {
+        ; 尝试临时注册热键验证格式
+        Hotkey(hotkeyStr, (*)=>{}, "On")
+        Hotkey(hotkeyStr, (*)=>{}, "Off")
+        return true
+    } catch {
+        return false
+    }
+}
+
+; 粘贴处理函数
+PasteHandler(*) {
     global Settings
 
     ; 如果脚本被禁用则直接返回
@@ -66,8 +100,13 @@ if (Settings.HumanTypingEnabled)
         Sleep Settings.ExecutionDelay
     }
 
-    ; 获取剪贴板内容并检查是否为空
-    if (clipText := A_Clipboard) != "" {
+    ; 标准化换行符
+    if (clipText := StrReplace(StrReplace(A_Clipboard, "`r`n", "`n"), "`r", "`n")) != "" {
+        ; 禁用缩进处理 - 移除每行开头的空格/制表符
+        if (Settings.DisableIndentation) {
+            clipText := RegExReplace(clipText, "m)^[\t ]+", "")
+        }
+
         Settings.IsTypingRunning := true  ; 标记运行状态
         try {
             ; 根据设置选择输入模式
@@ -78,7 +117,11 @@ if (Settings.HumanTypingEnabled)
                 loop Parse clipText {
                     if !Settings.IsTypingRunning
                         break  ; 如果收到停止信号则中断
-                    SendText A_LoopField
+                    if (A_LoopField = "`n") {
+                        Send "{Enter}"  ; 换行用Enter指令，而非直接发送`n
+                    } else {
+                        SendText A_LoopField
+                    }
                     Sleep 10  ; 微小延迟确保可以检测中断
                 }
             }
@@ -100,6 +143,17 @@ HumanLikeTyping(text) {
         if !Settings.IsTypingRunning {
             return
         }
+
+        currentLine := A_LoopField
+        ; 处理空行：仅发送换行，跳过字符解析
+        if (currentLine = "") {
+            if (A_Index > 1) {
+                Sleep Random(Settings.DelayBetweenLines[1], Settings.DelayBetweenLines[2])
+                Send "{Enter}"
+                Sleep Random(100, 300)
+            }
+            continue
+        }
         
         ; 如果不是第一行，添加行间延迟
         if (A_Index > 1) {
@@ -109,7 +163,7 @@ HumanLikeTyping(text) {
         }
       
         ; 逐个字符处理
-        loop Parse A_LoopField {
+        loop Parse currentLine {
             ; 检查是否应该停止
             if !Settings.IsTypingRunning {
                 return
@@ -158,6 +212,12 @@ LoadSettings() {
         ; 读取延迟执行设置
         Settings.DelayExecutionEnabled := (IniRead(iniFile, "Settings", "DelayExecutionEnabled", "false") = "true")
         Settings.ExecutionDelay := IniRead(iniFile, "Settings", "ExecutionDelay", Settings.ExecutionDelay) + 0
+        
+        ; 读取禁用缩进设置
+        Settings.DisableIndentation := (IniRead(iniFile, "Settings", "DisableIndentation", "false") = "true")
+
+        ; 读取快捷键设置
+        Settings.HotkeyPaste := IniRead(iniFile, "Settings", "HotkeyPaste", Settings.HotkeyPaste)
 
         ; 验证并修正延迟范围设置
         Settings.DelayBetweenLines := ValidateRange([Settings.DelayBetweenLines[1] + 0, Settings.DelayBetweenLines[2] + 0])
@@ -166,7 +226,20 @@ LoadSettings() {
     } catch as e {
         ; 出错时恢复默认设置
         MsgBox "加载设置失败: " e.Message "`n已恢复默认设置。", "错误", "Icon!"
-        Settings.ScriptEnabled := true
+        Settings := {
+            HumanTypingEnabled: false,
+            TypoRate: 5,
+            DelayBetweenLines: [200, 800],
+            DelayBetweenChars: [30, 150],
+            BackspaceDelay: [30, 100],
+            ScriptEnabled: true,
+            IsTypingRunning: false,
+            ShowHelpOnStartup: true,
+            DelayExecutionEnabled: false,
+            ExecutionDelay: 3000,
+            DisableIndentation: false,
+            HotkeyPaste: "^+v"
+        }
         SaveSettingsToIni()
     }
 }
@@ -195,6 +268,8 @@ SaveSettingsToIni() {
         IniWrite Settings.BackspaceDelay[1] "," Settings.BackspaceDelay[2], iniFile, "Settings", "BackspaceDelay"
         IniWrite Settings.DelayExecutionEnabled ? "true" : "false", iniFile, "Settings", "DelayExecutionEnabled"
         IniWrite Settings.ExecutionDelay, iniFile, "Settings", "ExecutionDelay"
+        IniWrite Settings.DisableIndentation ? "true" : "false", iniFile, "Settings", "DisableIndentation"
+        IniWrite Settings.HotkeyPaste, iniFile, "Settings", "HotkeyPaste"
     } catch as e {
         MsgBox "保存设置失败: " e.Message, "错误", "Icon!"
     }
@@ -210,6 +285,8 @@ ShowSettings(*) {
     MyGui.OnEvent("Close", GuiClose)
     MyGui.MarginX := 20
     MyGui.MarginY := 10
+    MyGui.MinWidth := 340
+    MyGui.MinHeight := 600
   
     ; 主框架
     MyGui.Add("GroupBox", "w300 h270", "启用脚本后，只有在模拟打字启用时这些设置才有效")
@@ -257,8 +334,11 @@ ShowSettings(*) {
     MyGui.Add("Text", "x" col1X " y" (curY + rowH + 30) " w100", "延迟时间 (秒):")
     ExecutionDelayEdit := MyGui.Add("Edit", "x" col2X " y" (curY + rowH + 30) " w50 Number", Settings.ExecutionDelay / 1000)
 
+    ; 禁用缩进复选框
+    DisableIndentCB := MyGui.Add("CheckBox", "x" col1X " y" (curY + rowH + 60) " w150 Checked" Settings.DisableIndentation, "禁用缩进")
+
     ; 保存按钮
-    SaveBtn := MyGui.Add("Button", "x100 y+25 w100", "保存设置")
+    SaveBtn := MyGui.Add("Button", "x100 y" (curY + rowH + 90) " w100", "保存设置")
     SaveBtn.OnEvent("Click", SaveSettings)
   
     MyGui.Show()
@@ -295,6 +375,8 @@ ShowSettings(*) {
             Settings.BackspaceDelay := [bkspMin, bkspMax]
             Settings.DelayExecutionEnabled := DelayExecutionCB.Value
             Settings.ExecutionDelay := execDelay * 1000  ; 转换为毫秒
+            ; 赋值禁用缩进设置
+            Settings.DisableIndentation := DisableIndentCB.Value
         
             ; 验证范围设置
             for range in [Settings.DelayBetweenLines, Settings.DelayBetweenChars, Settings.BackspaceDelay] {
@@ -373,16 +455,17 @@ ShowStartupHelp(ItemName := "", ItemPos := "", MyMenu := "") {
     
     helpText := "
     (LTrim
-    ClipboardBypass 2.0 使用指南
+    ClipboardBypass2 使用指南
 
     注意，该帮助只会在第一次启动时显示
     （当然你删了ini文件也会再次显示）
     你也可以右键托盘图标，点击帮助再次显示
   
     【主要功能】
-    快捷键：Ctrl+Shift+V 粘贴剪贴板内容
+    默认快捷键：Ctrl+Shift+V 粘贴剪贴板内容
     模拟打字输入（含可配置错字率）
     自定义输入延迟参数
+    禁用文本缩进（适配自动缩进软件）
   
     【使用技巧】
     1. 右键任务栏图标可：
@@ -398,23 +481,29 @@ ShowStartupHelp(ItemName := "", ItemPos := "", MyMenu := "") {
     3. 特殊符号：
     • 完全支持 #!^+ 等符号
   
+    【自定义快捷键】
+    • 编辑 ClipboardBypass2.ini 文件
+    • 修改 [Settings] 节下的 HotkeyPaste 值
+    • 格式请看仓库说明
+    • 无效格式会自动回退为默认 Ctrl+Shift+V
+    • 修改完毕后请重新打开软件
+  
     【注意事项】
     • 不支持图片粘贴
     • 不排除粘贴时有漏掉的情况
-    • 所有设置在"设置"菜单中可调整
-    • 启用脚本后，只有在模拟打字启用时设置才有效
-    • 保存设置请按"保存设置按钮"，下次启动仍有效
+    • 保存设置请按“保存设置按钮”，下次启动仍有效
+    • 禁用缩进功能会移除所有文本行开头的空格/制表符
     )"
     
     ; 菜单调用总是显示帮助
     if (ItemName != "" || ItemPos != "" || MyMenu != "") {
-        MsgBox(helpText, "ClipboardBypass 使用指南", "Iconi")
+        MsgBox(helpText, "ClipboardBypass2 使用指南", "Iconi")
         return
     }
     
     ; 首次启动且设置允许显示
     if (!hasShown && Settings.ShowHelpOnStartup) {
-        MsgBox(helpText, "ClipboardBypass 使用指南", "Iconi")
+        MsgBox(helpText, "ClipboardBypass2 使用指南", "Iconi")
         hasShown := true
         Settings.ShowHelpOnStartup := false
         SaveSettingsToIni()
@@ -483,7 +572,7 @@ ShowAbout(*) {
 
 Github：https://github.com/Little-Data/ClipboardBypass2.0
 
-最后更新：2025.11.17
+最后更新：2025.12.04
     )"
     MsgBox helpText, "关于", "Iconi"
 }
